@@ -19,9 +19,9 @@ export async function backendFetch<T = unknown>(
 ): Promise<ApiResponse<T>> {
   const url = `${BACKEND_URL}${endpoint}`;
 
-  const headers: HeadersInit = {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...options.headers,
+    ...(options.headers as Record<string, string>),
   };
 
   if (token) {
