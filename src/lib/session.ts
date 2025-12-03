@@ -5,7 +5,9 @@
 import { cookies } from 'next/headers';
 
 const SESSION_COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'smartflex_session';
-const JWT_SECRET = process.env.JWT_SECRET || 'change-this-secret';
+// JWT_SECRET reserved for future JWT validation
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _JWT_SECRET = process.env.JWT_SECRET || 'change-this-secret';
 
 export interface SessionData {
   token: string;

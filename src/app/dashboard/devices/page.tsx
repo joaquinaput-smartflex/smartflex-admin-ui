@@ -1,5 +1,5 @@
 import { Title, Text, Stack, Card, Alert } from '@mantine/core';
-import { IconDevices, IconAlertCircle } from '@tabler/icons-react';
+import { IconAlertCircle } from '@tabler/icons-react';
 
 export default function DevicesPage() {
   return (
