@@ -77,12 +77,13 @@ export function DashboardShell({ children, username, role }: DashboardShellProps
             <Title
               order={3}
               style={{
-                background: 'linear-gradient(135deg, var(--mantine-color-smartflex-4), var(--mantine-color-smartflex-6))',
+                fontSize: 20,
+                background: 'linear-gradient(135deg, #60a5fa, #3b82f6)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
               }}
             >
-              SmartFlex
+              SMARTFLEX
             </Title>
           </Group>
 

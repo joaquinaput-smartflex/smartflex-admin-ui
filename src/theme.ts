@@ -1,30 +1,30 @@
 import { createTheme, MantineColorsTuple } from '@mantine/core';
 
-// SmartFlex brand colors
+// SmartFlex brand colors - matching existing admin panel
 const smartflex: MantineColorsTuple = [
   '#e5f4ff',
   '#cde4ff',
   '#9bc6fc',
   '#64a6f9',
-  '#398bf6',
-  '#1d7af5',
-  '#0971f6',
-  '#0060db',
-  '#0055c4',
-  '#0049ac'
+  '#3b82f6',  // Matches gradient
+  '#1a56db',  // Primary from old panel
+  '#1e40af',  // Primary dark
+  '#1e3a8a',
+  '#1e3a8a',
+  '#172554'
 ];
 
 const success: MantineColorsTuple = [
-  '#e6fcf5',
-  '#c3fae8',
-  '#96f2d7',
-  '#63e6be',
-  '#38d9a9',
-  '#20c997',
-  '#12b886',
-  '#0ca678',
-  '#099268',
-  '#087f5b'
+  '#ecfdf5',
+  '#d1fae5',
+  '#a7f3d0',
+  '#6ee7b7',
+  '#34d399',  // Light success
+  '#10b981',
+  '#059669',  // Main success from old panel
+  '#047857',
+  '#065f46',
+  '#064e3b'
 ];
 
 export const theme = createTheme({

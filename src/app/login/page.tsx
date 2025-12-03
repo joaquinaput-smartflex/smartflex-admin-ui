@@ -76,14 +76,14 @@ export default function LoginPage() {
           <Stack align="center" gap="xs">
             <Title
               style={{
-                fontSize: 32,
+                fontSize: 28,
                 fontWeight: 700,
-                background: 'linear-gradient(135deg, var(--mantine-color-smartflex-4), var(--mantine-color-smartflex-6))',
+                background: 'linear-gradient(135deg, #60a5fa, #3b82f6)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
               }}
             >
-              SmartFlex
+              SMARTFLEX
             </Title>
             <Text c="dimmed" size="sm">
               Panel de Administración
