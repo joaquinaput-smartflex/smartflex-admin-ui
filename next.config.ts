@@ -3,6 +3,8 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   output: 'standalone',
+  basePath: '/admin-ui',
+  assetPrefix: '/admin-ui',
   // Security headers
   async headers() {
     return [
