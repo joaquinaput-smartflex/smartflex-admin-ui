@@ -67,7 +67,9 @@ export async function POST(request: NextRequest) {
         }
       );
       if (usersResult.ok) {
-        const users = await usersResult.json();
+        const data = await usersResult.json();
+        // Backend returns { users: [...] }
+        const users = Array.isArray(data) ? data : data.users || [];
         const currentUser = users.find((u: { username: string }) => u.username === payload.sub);
         if (currentUser) {
           role = currentUser.role;
