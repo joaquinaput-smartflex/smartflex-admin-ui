@@ -1,18 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authApi } from '@/lib/api';
 import { createSession } from '@/lib/session';
 
-// Decode JWT payload without verification (server already validated it)
-function decodeJwtPayload(token: string): { sub: string; exp: number } | null {
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
-    return payload;
-  } catch {
-    return null;
-  }
-}
+const BACKEND_URL = process.env.BACKEND_URL || 'http://127.0.0.1:8000';
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,69 +15,59 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Call backend login
-    const loginResult = await authApi.login(username, password);
+    // Step 1: Call backend login (same as old panel)
+    const loginResponse = await fetch(`${BACKEND_URL}/admin/api/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+      cache: 'no-store',
+    });
 
-    if (loginResult.error || !loginResult.data) {
+    if (!loginResponse.ok) {
+      const errorData = await loginResponse.json().catch(() => ({}));
       return NextResponse.json(
-        { error: loginResult.error || 'Credenciales inválidas' },
-        { status: loginResult.status }
+        { error: errorData.detail || 'Credenciales inválidas' },
+        { status: loginResponse.status }
       );
     }
 
-    const { token } = loginResult.data;
+    const loginData = await loginResponse.json();
+    const token = loginData.token;
 
-    // Decode JWT to get username
-    const payload = decodeJwtPayload(token);
-    if (!payload) {
+    if (!token) {
       return NextResponse.json(
-        { error: 'Token inválido' },
+        { error: 'No se recibió token del servidor' },
         { status: 500 }
       );
     }
 
-    // Get user role from verify endpoint
-    const verifyResult = await fetch(
-      `${process.env.BACKEND_URL || 'http://127.0.0.1:8000'}/admin/api/verify`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: 'no-store',
-      }
-    );
+    // Step 2: Get user info (same as old panel uses /settings/user-info)
+    const userInfoResponse = await fetch(`${BACKEND_URL}/admin/api/settings/user-info`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+      cache: 'no-store',
+    });
 
-    let role = 'viewer'; // default
-    if (verifyResult.ok) {
-      // Try to get role from users list if we're admin
-      const usersResult = await fetch(
-        `${process.env.BACKEND_URL || 'http://127.0.0.1:8000'}/admin/api/users`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-          cache: 'no-store',
-        }
+    if (!userInfoResponse.ok) {
+      return NextResponse.json(
+        { error: 'Error al obtener información del usuario' },
+        { status: 500 }
       );
-      if (usersResult.ok) {
-        const data = await usersResult.json();
-        // Backend returns { users: [...] }
-        const users = Array.isArray(data) ? data : data.users || [];
-        const currentUser = users.find((u: { username: string }) => u.username === payload.sub);
-        if (currentUser) {
-          role = currentUser.role;
-        }
-      }
     }
 
-    // Create session with token and user info
+    const userInfo = await userInfoResponse.json();
+
+    // Step 3: Create session with token and user info
     await createSession({
       token: token,
-      username: payload.sub,
-      role: role,
+      username: userInfo.username,
+      role: userInfo.role,
     });
 
     return NextResponse.json({
       success: true,
       user: {
-        username: payload.sub,
-        role: role,
+        username: userInfo.username,
+        role: userInfo.role,
       },
     });
   } catch (error) {
