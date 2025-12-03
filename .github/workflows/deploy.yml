@@ -1,13 +1,17 @@
-name: Deploy to VPS
+name: Test and Deploy to VPS
 
 on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
-  deploy:
+  test:
     runs-on: ubuntu-latest
+    name: Run Tests
 
     steps:
       - name: Checkout code
@@ -22,21 +26,57 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build application
-        run: npm run build
-        env:
-          BACKEND_URL: ${{ secrets.BACKEND_URL }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      - name: Run linter
+        run: npm run lint
 
-      - name: Deploy to VPS via SSH
+      - name: Run tests
+        run: npm run test:run
+
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy to VPS
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            cd /home/${{ secrets.VPS_USER }}/smartflex-admin-ui
+            # Load NVM
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+            # Navigate to project
+            cd ~/smartflex-admin-ui
+
+            # Pull latest changes
             git pull origin main
-            npm ci --production
+
+            # Install dependencies
+            npm ci
+
+            # Build the application
             npm run build
-            pm2 restart smartflex-admin || pm2 start npm --name "smartflex-admin" -- start
+
+            # Copy static files to standalone directory
+            cp -r .next/static .next/standalone/.next/
+            cp -r public .next/standalone/ 2>/dev/null || true
+
+            # Create .env for standalone
+            cat > .next/standalone/.env << EOF
+            BACKEND_URL=${{ secrets.BACKEND_URL }}
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            NODE_ENV=production
+            EOF
+
+            # Restart PM2 with standalone server
+            pm2 delete smartflex-admin 2>/dev/null || true
+            cd .next/standalone
+            PORT=3000 pm2 start server.js --name smartflex-admin
+            pm2 save
+
+            echo "Deploy completed successfully!"
