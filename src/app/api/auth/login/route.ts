@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authApi, settingsApi } from '@/lib/api';
+import { authApi } from '@/lib/api';
 import { createSession } from '@/lib/session';
+
+// Decode JWT payload without verification (server already validated it)
+function decodeJwtPayload(token: string): { sub: string; exp: number } | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+    return payload;
+  } catch {
+    return null;
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -24,30 +36,57 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { access_token } = loginResult.data;
+    const { token } = loginResult.data;
 
-    // Get user info to store in session
-    const userInfoResult = await settingsApi.getUserInfo(access_token);
-
-    if (userInfoResult.error || !userInfoResult.data) {
+    // Decode JWT to get username
+    const payload = decodeJwtPayload(token);
+    if (!payload) {
       return NextResponse.json(
-        { error: 'Error al obtener información del usuario' },
+        { error: 'Token inválido' },
         { status: 500 }
       );
     }
 
+    // Get user role from verify endpoint
+    const verifyResult = await fetch(
+      `${process.env.BACKEND_URL || 'http://127.0.0.1:8000'}/admin/api/verify`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      }
+    );
+
+    let role = 'viewer'; // default
+    if (verifyResult.ok) {
+      // Try to get role from users list if we're admin
+      const usersResult = await fetch(
+        `${process.env.BACKEND_URL || 'http://127.0.0.1:8000'}/admin/api/users`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store',
+        }
+      );
+      if (usersResult.ok) {
+        const users = await usersResult.json();
+        const currentUser = users.find((u: { username: string }) => u.username === payload.sub);
+        if (currentUser) {
+          role = currentUser.role;
+        }
+      }
+    }
+
     // Create session with token and user info
     await createSession({
-      token: access_token,
-      username: userInfoResult.data.username,
-      role: userInfoResult.data.role,
+      token: token,
+      username: payload.sub,
+      role: role,
     });
 
     return NextResponse.json({
       success: true,
       user: {
-        username: userInfoResult.data.username,
-        role: userInfoResult.data.role,
+        username: payload.sub,
+        role: role,
       },
     });
   } catch (error) {

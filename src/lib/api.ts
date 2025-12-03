@@ -62,7 +62,7 @@ export async function backendFetch<T = unknown>(
 // Auth endpoints
 export const authApi = {
   login: async (username: string, password: string) => {
-    return backendFetch<{ access_token: string; token_type: string }>(
+    return backendFetch<{ token: string; expires_at: string; must_change_password: boolean }>(
       '/admin/api/login',
       {
         method: 'POST',
