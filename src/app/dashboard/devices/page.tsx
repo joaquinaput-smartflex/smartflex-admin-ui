@@ -40,6 +40,8 @@ import {
   IconSettings,
   IconInfoCircle,
   IconAntenna,
+  IconPlayerPlay,
+  IconExternalLink,
 } from '@tabler/icons-react';
 import { apiUrl } from '@/lib/client-api';
 
@@ -82,6 +84,7 @@ export default function DevicesPage() {
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
   const [modalOpened, { open: openModal, close: closeModal }] = useDisclosure(false);
   const [deleteOpened, { open: openDelete, close: closeDelete }] = useDisclosure(false);
+  const [controlOpened, { open: openControl, close: closeControl }] = useDisclosure(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Filter devices based on search query
@@ -447,6 +450,18 @@ export default function DevicesPage() {
                 </Table.Td>
                 <Table.Td>
                   <Group gap="xs">
+                    <Tooltip label="Control WebUI">
+                      <ActionIcon
+                        variant="subtle"
+                        color="green"
+                        onClick={() => {
+                          setSelectedDevice(device);
+                          openControl();
+                        }}
+                      >
+                        <IconPlayerPlay size={18} />
+                      </ActionIcon>
+                    </Tooltip>
                     <Tooltip label="Editar">
                       <ActionIcon
                         variant="subtle"
@@ -742,6 +757,36 @@ export default function DevicesPage() {
             </Button>
           </Group>
         </Stack>
+      </Modal>
+
+      {/* Control WebUI Modal */}
+      <Modal
+        opened={controlOpened}
+        onClose={closeControl}
+        title={
+          <Group gap="sm">
+            <IconPlayerPlay size={20} color="var(--mantine-color-green-6)" />
+            <Text fw={500}>Control WebUI - {selectedDevice?.name || selectedDevice?.device_id}</Text>
+          </Group>
+        }
+        size="100%"
+        fullScreen
+        styles={{
+          body: { padding: 0, height: 'calc(100vh - 60px)' },
+          header: { borderBottom: '1px solid var(--mantine-color-default-border)' },
+        }}
+      >
+        {selectedDevice && (
+          <iframe
+            src={`https://smartflex.com.ar/smartflex_webui.html?device_id=${encodeURIComponent(selectedDevice.device_id)}&name=${encodeURIComponent(selectedDevice.name || selectedDevice.device_id)}&autoconnect=1`}
+            style={{
+              width: '100%',
+              height: '100%',
+              border: 'none',
+            }}
+            title={`WebUI Control - ${selectedDevice.device_id}`}
+          />
+        )}
       </Modal>
     </Stack>
   );
