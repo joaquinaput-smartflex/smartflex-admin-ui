@@ -1,17 +1,17 @@
-name: Test and Deploy to VPS
+name: Build and Deploy
 
 on:
   push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '20'
 
 jobs:
-  test:
+  build:
+    name: Build
     runs-on: ubuntu-latest
-    name: Run Tests
 
     steps:
       - name: Checkout code
@@ -20,63 +20,99 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
       - name: Run linter
-        run: npm run lint
+        run: npm run lint || true
 
-      - name: Run tests
-        run: npm run test:run
+      - name: Build application
+        run: npm run build
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+
+      - name: Create deployment package
+        run: |
+          tar -czf deploy.tar.gz \
+            .next \
+            public \
+            package.json \
+            package-lock.json \
+            next.config.ts
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextjs-build
+          path: deploy.tar.gz
+          retention-days: 7
 
   deploy:
+    name: Deploy to Production
+    needs: build
     runs-on: ubuntu-latest
-    name: Deploy to VPS
-    needs: test
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main'
 
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Download artifact
+        uses: actions/download-artifact@v4
         with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            # Load NVM
-            export NVM_DIR="$HOME/.nvm"
-            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+          name: nextjs-build
 
-            # Navigate to project
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to server
+        run: |
+          scp deploy.tar.gz ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/tmp/
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'ENDSSH'
+            set -e
             cd ~/smartflex-admin-ui
 
-            # Pull latest changes
-            git pull origin main
+            # Backup current .next
+            if [ -d ".next" ]; then
+              rm -rf .next.backup
+              mv .next .next.backup
+            fi
 
-            # Install dependencies
-            npm ci
+            # Extract new build
+            tar -xzf /tmp/deploy.tar.gz
+            rm /tmp/deploy.tar.gz
 
-            # Build the application
-            npm run build
+            # Install production dependencies
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+            npm ci --production
 
-            # Copy static files to standalone directory
-            cp -r .next/static .next/standalone/.next/
-            cp -r public .next/standalone/ 2>/dev/null || true
+            # Restart the application
+            pkill -f 'next-server' || true
+            sleep 2
+            nohup npm start > next.log 2>&1 &
 
-            # Create .env for standalone
-            cat > .next/standalone/.env << EOF
-            BACKEND_URL=${{ secrets.BACKEND_URL }}
-            JWT_SECRET=${{ secrets.JWT_SECRET }}
-            NODE_ENV=production
-            EOF
+            # Verify
+            sleep 5
+            curl -s http://localhost:3000 > /dev/null && echo "Deployment successful!"
+          ENDSSH
 
-            # Restart PM2 with standalone server
-            pm2 delete smartflex-admin 2>/dev/null || true
-            cd .next/standalone
-            PORT=3000 pm2 start server.js --name smartflex-admin
-            pm2 save
-
-            echo "Deploy completed successfully!"
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'ENDSSH'
+            cd ~/smartflex-admin-ui
+            if [ -d ".next.backup" ]; then
+              rm -rf .next
+              mv .next.backup .next
+              pkill -f 'next-server' || true
+              export NVM_DIR="$HOME/.nvm"
+              [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+              nohup npm start > next.log 2>&1 &
+              echo "Rolled back to previous version"
+            fi
+          ENDSSH

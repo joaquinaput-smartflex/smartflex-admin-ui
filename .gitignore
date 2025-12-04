@@ -40,3 +40,6 @@ next-env.d.ts
 
 # Testing
 coverage
+
+# Deployment artifacts
+deploy.tar.gz
