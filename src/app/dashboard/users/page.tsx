@@ -29,6 +29,7 @@ import {
   IconLock,
   IconAlertCircle,
 } from '@tabler/icons-react';
+import { apiUrl } from '@/lib/client-api';
 
 interface User {
   id: number;
@@ -63,7 +64,7 @@ export default function UsersPage() {
 
   const loadUsers = async () => {
     try {
-      const response = await fetch('/api/users');
+      const response = await fetch(apiUrl('/api/users'));
       if (response.ok) {
         const data = await response.json();
         setUsers(data);

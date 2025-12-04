@@ -26,6 +26,7 @@ import {
   IconChevronDown,
   IconKey,
 } from '@tabler/icons-react';
+import { apiUrl } from '@/lib/client-api';
 
 interface DashboardShellProps {
   children: React.ReactNode;
@@ -47,7 +48,7 @@ export function DashboardShell({ children, username, role }: DashboardShellProps
 
   const handleLogout = async () => {
     setLoggingOut(true);
-    await fetch('/api/auth/logout', { method: 'POST' });
+    await fetch(apiUrl('/api/auth/logout'), { method: 'POST' });
     router.push('/login');
     router.refresh();
   };

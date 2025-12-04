@@ -17,6 +17,7 @@ import {
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
 import { IconKey, IconAlertCircle, IconRefresh, IconCheck } from '@tabler/icons-react';
+import { apiUrl } from '@/lib/client-api';
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
@@ -39,7 +40,7 @@ export default function SettingsPage() {
   const loadCurrentPassword = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/settings/default-password');
+      const response = await fetch(apiUrl('/api/settings/default-password'));
       if (response.ok) {
         const data = await response.json();
         setCurrentPassword(data.password || 'iot@Smartflex');
@@ -61,7 +62,7 @@ export default function SettingsPage() {
   const handleSubmit = async (values: typeof form.values) => {
     setSaving(true);
     try {
-      const response = await fetch('/api/settings/default-password', {
+      const response = await fetch(apiUrl('/api/settings/default-password'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: values.password }),
