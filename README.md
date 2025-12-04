@@ -5,6 +5,7 @@
 Panel de administración moderno para **SmartFlex IoT** - Sistema multi-tenant para control y monitoreo de dispositivos vía WhatsApp, con facturación automatizada.
 
 **URL de producción:** https://smartflex.com.ar/admin
+**Versión:** SMART-v52.0_PRO
 
 ---
 
@@ -34,7 +35,9 @@ Panel de administración moderno para **SmartFlex IoT** - Sistema multi-tenant p
 - **Vitest + React Testing Library** para tests unitarios
 - **TypeScript** con tipado estricto
 
-## Tecnologías
+## Stack Tecnológico Completo
+
+### Admin Panel (Este Repo)
 
 | Categoría | Tecnología | Versión |
 |-----------|------------|---------|
@@ -47,9 +50,38 @@ Panel de administración moderno para **SmartFlex IoT** - Sistema multi-tenant p
 | CI/CD | GitHub Actions | - |
 | Runtime | Node.js | 20.x |
 
+### Backend & Cloud
+
+| Componente | Tecnología |
+|------------|------------|
+| Runtime | Python 3.11+ / FastAPI |
+| Base de datos | MySQL 8.4+ |
+| MQTT Broker | EMQX / HiveMQ Cloud |
+| API WhatsApp | WhatsApp Cloud API (Meta) |
+| Hosting | Google Cloud VPS |
+
+### Hardware
+
+| Componente | Tecnología |
+|------------|------------|
+| MCU | ESP32 (LilyGO T-SIM7070G) |
+| Módem | SIM7600G-H (4G LTE) |
+| Sensores | DHT22, GPS/GNSS |
+| I/O | 7 DI + 4 DO |
+
 ---
 
 ## Arquitectura del Sistema
+
+### Las 4 Columnas del Sistema
+
+| Hardware | Comunicación | Cloud | Interfaces |
+|----------|--------------|-------|------------|
+| ESP32 | 4G LTE | FastAPI | Bot WhatsApp |
+| SIM7600G-H | MQTT TLS | MySQL | Web Dashboard |
+| DHT22 | WebSockets | EMQX | Admin Panel |
+| GPS/GNSS | AT Commands | WhatsApp API | API REST |
+| 7 DI + 4 DO | JSON | FreeRTOS | Reportes |
 
 ### Arquitectura General
 
@@ -75,6 +107,21 @@ Panel de administración moderno para **SmartFlex IoT** - Sistema multi-tenant p
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
+### Flujo de Datos MQTT
+
+```
+┌─────────┐     ┌─────────┐     ┌─────────┐     ┌─────────┐
+│  ESP32  │────▶│  4G/LTE │────▶│  EMQX   │────▶│ FastAPI │
+│         │     │         │     │ Broker  │     │ Backend │
+└─────────┘     └─────────┘     └─────────┘     └─────────┘
+                                      │
+                                      ▼
+                               ┌─────────────┐
+                               │   MySQL     │
+                               │  Database   │
+                               └─────────────┘
+```
+
 ### Arquitectura de Seguridad (BFF Pattern)
 
 ```
@@ -86,13 +133,484 @@ Panel de administración moderno para **SmartFlex IoT** - Sistema multi-tenant p
 
 El cliente **nunca** conoce la URL del backend. Todas las peticiones pasan por las API Routes de Next.js que actúan como proxy.
 
-### Flujo de Autenticación
+---
 
-1. Usuario envía credenciales a `/api/auth/login`
-2. Next.js valida con FastAPI backend (interno)
-3. Si es válido, crea JWT y lo guarda en cookie httpOnly
-4. Las siguientes peticiones incluyen la cookie automáticamente
-5. Next.js valida el JWT y agrega headers al backend
+## FreeRTOS Dual-Core (Firmware ESP32)
+
+El ESP32 ejecuta FreeRTOS con distribución de tareas en dos núcleos:
+
+### Core 0 - Comunicaciones
+
+| Tarea | Prioridad | Función |
+|-------|-----------|---------|
+| `taskMQTT` | Alta | Conexión y publicación MQTT |
+| `taskModem` | Alta | Gestión del módulo SIM7600 |
+| `taskGNSS` | Media | Adquisición GPS con fallback CLBS |
+| `taskCommands` | Media | Procesamiento de comandos remotos |
+
+### Core 1 - Sensores y Lógica
+
+| Tarea | Prioridad | Función |
+|-------|-----------|---------|
+| `taskSensors` | Alta | Lectura DHT22 y batería |
+| `taskInputs` | Alta | Monitoreo de 7 entradas digitales |
+| `taskOutputs` | Media | Control de 4 salidas digitales |
+| `taskAlarms` | Alta | Evaluación y disparo de alarmas |
+
+### Secuencia de Stages (Boot)
+
+```
+STAGE 0: Init Hardware
+    ↓
+STAGE 1: Modem Power On
+    ↓
+STAGE 2: Network Registration
+    ↓
+STAGE 3: MQTT Connect
+    ↓
+STAGE 4: Subscribe Topics
+    ↓
+STAGE 5: Operational Loop
+```
+
+---
+
+## Comunicación MQTT
+
+### Topics MQTT
+
+| Topic | Dirección | Contenido |
+|-------|-----------|-----------|
+| `smartflex/{device_id}/telemetry` | ESP32 → Cloud | Datos de sensores |
+| `smartflex/{device_id}/status` | ESP32 → Cloud | Estado del dispositivo |
+| `smartflex/{device_id}/alarms` | ESP32 → Cloud | Alarmas activas |
+| `smartflex/{device_id}/commands` | Cloud → ESP32 | Comandos de control |
+| `smartflex/{device_id}/config` | Cloud → ESP32 | Configuración remota |
+
+### Formato de Payload (JSON)
+
+```json
+{
+  "device_id": "SF-001",
+  "timestamp": 1699876543,
+  "temperature": 24.5,
+  "humidity": 62,
+  "battery": { "percent": 87, "voltage": 12.6 },
+  "inputs": [1, 0, 0, 1, 0, 0, 1],
+  "outputs": [0, 1, 0, 0],
+  "gps": { "lat": -34.6037, "lng": -58.3816, "valid": true }
+}
+```
+
+### Triggers de Envío de Datos
+
+El sistema envía datos al servidor cuando:
+
+1. **Cambio de entrada digital** - Inmediato
+2. **Comando de salida ejecutado** - Inmediato
+3. **Alarma disparada** - Inmediato
+4. **Intervalo periódico** - Cada 60 segundos (configurable)
+5. **Solicitud del servidor** - Bajo demanda
+6. **Batería crítica** - Cuando < 20%
+
+---
+
+## Ciclo GNSS con Fallback
+
+### Diagrama de Flujo
+
+```
+┌──────────────────┐
+│  Iniciar GNSS    │
+└────────┬─────────┘
+         ▼
+┌──────────────────┐
+│ AT+CGNSSPWR=1    │
+└────────┬─────────┘
+         ▼
+┌──────────────────┐     NO      ┌──────────────────┐
+│  ¿Fix válido?    │────────────▶│  Fallback CLBS   │
+│  (30s timeout)   │             │  AT+CLBS=1,1     │
+└────────┬─────────┘             └────────┬─────────┘
+         │ SÍ                             │
+         ▼                                ▼
+┌──────────────────┐             ┌──────────────────┐
+│ Usar coordenadas │             │ Usar ubicación   │
+│ GPS precisas     │             │ por celdas       │
+└────────┬─────────┘             └────────┬─────────┘
+         │                                │
+         └───────────────┬────────────────┘
+                         ▼
+              ┌──────────────────┐
+              │ Publicar en MQTT │
+              └──────────────────┘
+```
+
+### Comandos AT para GNSS
+
+| Comando | Función | Respuesta |
+|---------|---------|-----------|
+| `AT+CGNSSPWR=1` | Encender GPS | OK |
+| `AT+CGNSSINFO` | Obtener coordenadas | +CGNSSINFO: lat,lng,alt,... |
+| `AT+CLBS=1,1` | Ubicación por celdas (fallback) | +CLBS: 0,lat,lng,acc |
+| `AT+CGNSSPWR=0` | Apagar GPS (ahorro energía) | OK |
+
+### Parámetros de Configuración GPS
+
+- **GPS Timeout:** 30 segundos
+- **CLBS Accuracy:** ~500m (urbano), ~2km (rural)
+- **Update Interval:** Configurable (60s - 3600s)
+- **Power Mode:** Auto-sleep entre lecturas
+
+---
+
+## Sensores y Monitoreo
+
+### Sensor DHT22 (Temperatura/Humedad)
+
+| Parámetro | Rango | Precisión |
+|-----------|-------|-----------|
+| Temperatura | -40°C a 80°C | ±0.5°C |
+| Humedad | 0% a 100% | ±2% |
+| Intervalo mínimo | 2 segundos | - |
+
+### Monitoreo de Batería
+
+| Nivel | Voltaje | Porcentaje |
+|-------|---------|------------|
+| Llena | ≥ 12.6V | 100% |
+| Normal | 12.0V - 12.6V | 50-99% |
+| Baja | 11.5V - 12.0V | 20-49% |
+| Crítica | < 11.5V | < 20% |
+
+```
+Voltaje ADC → Divisor Resistivo → Cálculo
+    │
+    ├── Rango: 10V - 15V
+    ├── Resolución: 12 bits
+    └── Fórmula: V = (ADC / 4095) × 3.3 × Factor
+```
+
+---
+
+## Configuración I/O
+
+### Entradas Digitales (DI1 - DI7)
+
+| ID | Alias (ejemplo) | Uso típico | Sensor |
+|----|-----------------|------------|--------|
+| DI1 | Puerta Principal | Acceso | Magnético |
+| DI2 | Ventana Cocina | Seguridad | Magnético |
+| DI3 | Sensor Movimiento | Intrusión | PIR |
+| DI4 | Alarma Humo | Incendio | Detector humo |
+| DI5 | Botón Pánico | Emergencia | Pulsador |
+| DI6 | Sensor Agua | Inundación | Detector agua |
+| DI7 | Garage | Posición | Fin de carrera |
+
+### Salidas Digitales (DO1 - DO4)
+
+| ID | Alias (ejemplo) | Uso típico | Comandos |
+|----|-----------------|------------|----------|
+| DO1 | Luz Exterior | Iluminación | ON/OFF/TOGGLE |
+| DO2 | Sirena | Alarma | ON/OFF/TOGGLE |
+| DO3 | Bomba Agua | Riego/Cisterna | ON/OFF/TOGGLE |
+| DO4 | Portón Garage | Acceso | ON/OFF/TOGGLE |
+
+### Sensores Adicionales
+
+| Sensor | Datos | Formato | Precisión |
+|--------|-------|---------|-----------|
+| **DHT22** | Temperatura y Humedad | 25.5°C / 65% | ±0.5°C / ±2% |
+| **Batería** | Nivel de carga | 85% \| 12.4V | ±0.1V |
+| **GPS** | Ubicación | Lat/Long + Link Maps | ~3m (GPS) / ~500m (CLBS) |
+
+---
+
+## WhatsApp Bot - Chatbot
+
+### Estados del Chatbot
+
+El chatbot mantiene un estado de conversación por usuario:
+
+| Estado | Descripción |
+|--------|-------------|
+| `IDLE` | Esperando mensaje inicial |
+| `MENU_PRINCIPAL` | Mostrando lista de Arduinos |
+| `MENU_ARDUINO` | Dentro de un Arduino específico |
+| `MENU_CONTROL` | Seleccionando salida a controlar |
+| `CONTROL_SALIDA` | Ejecutando comando en una salida |
+| `MENU_ALERTAS` | Gestionando suscripciones |
+| `WAITING_CONFIRMATION` | Esperando confirmación de acción |
+
+### Flujo de Navegación
+
+1. Usuario envía "Hola" o cualquier mensaje inicial
+2. Bot verifica si el número está registrado en la base de datos
+3. Obtiene Company y Rol del usuario
+4. Lista los Arduinos disponibles para su Company
+5. Muestra menú principal según el rol
+
+### Menú Principal (Usuario Registrado)
+
+```
+¡Hola Juan! 👋
+Tienes acceso a los siguientes dispositivos:
+
+1️⃣ Casa Principal
+2️⃣ Oficina Centro
+
+📊 Estado General
+🔔 Gestionar Alertas
+❓ Ayuda
+```
+
+### Comandos de Control (Rol Operador)
+
+| Comando | Acción |
+|---------|--------|
+| `/estado [arduino]` | Ver estado completo |
+| `/on [arduino] [salida]` | Encender salida específica |
+| `/off [arduino] [salida]` | Apagar salida específica |
+| `/toggle [arduino] [salida]` | Cambiar estado de salida |
+| `/gps [arduino]` | Ver ubicación GPS |
+| `/alertas` | Ver suscripciones de alertas |
+
+**Ejemplo:**
+```
+/on casa luz
+→ Enciende la "Luz Exterior" del Arduino "Casa Principal"
+```
+
+### Comandos de Reportes (Rol Propietario)
+
+| Comando | Resultado |
+|---------|-----------|
+| `/reportes` | Abre menú de reportes |
+| `/ranking` | Ranking de operadores (30 días) |
+| `/pendientes` | Alarmas sin confirmar ahora |
+| `/offline` | Equipos sin conexión |
+| `/resumen` | Resumen general del día |
+| `/equipos` | Equipos más problemáticos |
+| `/comparar` | Comparativa mes actual vs anterior |
+| `/comandos` | Últimos 10 comandos ejecutados |
+
+### Roles WhatsApp
+
+| Rol | Permisos |
+|-----|----------|
+| **Propietario** | ✅ Ver estado, sensores, reportes. ❌ NO puede ejecutar comandos. |
+| **Operador** | ✅ Todo lo del Propietario + ejecutar comandos ON/OFF/TOGGLE |
+
+---
+
+## Formatos de Respuesta del Chatbot
+
+### Estado Completo de un Arduino
+
+```
+📊 Estado Completo - Casa Principal
+━━━━━━━━━━━━━━━━━━━━━━
+
+🌡️ Temperatura: 24.5°C
+💧 Humedad: 62%
+🔋 Batería: 87% (12.6V)
+
+━━━━━━━━━━━━━━━━━━━━━━
+📥 ENTRADAS:
+• Puerta Principal: 🟢 Cerrada
+• Ventana Cocina: 🔴 Abierta
+
+━━━━━━━━━━━━━━━━━━━━━━
+📤 SALIDAS:
+• Luz Exterior: 🔴 OFF
+• Bomba Agua: 🟢 ON
+
+🕐 Actualizado: hace 30 seg
+```
+
+### Confirmación de Comando
+
+```
+✅ Comando ejecutado correctamente
+Luz Exterior: OFF → ON
+🕐 Ejecutado: 14:32:15
+```
+
+### Error de Comando
+
+```
+❌ Error al ejecutar comando
+No se pudo comunicar con el dispositivo.
+Intente nuevamente en unos segundos.
+```
+
+---
+
+## Sistema de Reportes (25 tipos)
+
+### Menú de Reportes en WhatsApp
+
+```
+📊 Centro de Reportes
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+👥 OPERADORES
+1️⃣ Rendimiento de operadores
+2️⃣ Ranking de respuestas
+3️⃣ Tasa de escalamiento
+4️⃣ Horarios respuesta lenta
+
+🚨 ALARMAS
+5️⃣ Últimas confirmadas
+6️⃣ Sin confirmar (activas)
+7️⃣ Tiempos de respuesta
+8️⃣ Distribución severidad
+
+🔧 EQUIPOS
+9️⃣ Más problemáticos
+🔟 Equipos offline
+
+📈 TENDENCIAS
+1️⃣1️⃣ Análisis temporal
+
+0️⃣ Volver
+```
+
+### Reportes de Operadores (4)
+1. Rendimiento de operadores (Hoy/7d/30d)
+2. Ranking de respuestas (7d/30d)
+3. Tasa de escalamiento por operador (30d)
+4. Horarios con respuesta lenta (30d)
+
+### Reportes de Alarmas (7)
+5. Últimas alarmas confirmadas (Últimas 10/20)
+6. Alarmas sin confirmar (Activas ahora)
+7. Tiempos de respuesta (7d/30d)
+8. Tiempo en estado de alarma (7d/30d)
+9. Distribución por severidad (7d/30d)
+10. Alarmas recurrentes (30d)
+11. Escalamientos múltiples (30d)
+
+### Reportes de Equipos (7)
+12. Equipos más problemáticos (7d/30d)
+13. Equipos offline (Ahora)
+14. Historial batería baja (7d)
+15. Temp/Humedad fuera de rango (7d)
+16. Sensores inactivos - posible falla (30d)
+17. Uptime por equipo (30d)
+18. Salud de equipos (dashboard)
+
+### Reportes de Tendencias (4)
+19. Alarmas por hora del día (7d/30d)
+20. Alarmas por día de semana (30d)
+21. Tendencia mensual (12 meses)
+22. Comparativa mes actual vs anterior
+
+### Reportes de Comandos (4)
+23. Historial de comandos (Últimos 50)
+24. Comandos por operador (7d/30d)
+25. Salidas más utilizadas (30d)
+26. Comandos post-alarma (30d)
+
+---
+
+## Ejemplos de Reportes
+
+### Rendimiento de Operadores
+
+```
+👥 Rendimiento de Operadores (últimos 7 días)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+👤 Juan Pérez
+📊 Alarmas recibidas: 45
+✅ Confirmadas: 43 (95.5%)
+⏱️ Tiempo promedio: 1m 23s
+📢 Escalamientos: 2
+
+👤 María García
+📊 Alarmas recibidas: 38
+✅ Confirmadas: 38 (100%)
+⏱️ Tiempo promedio: 0m 47s
+📢 Escalamientos: 0
+```
+
+### Ranking de Respuestas
+
+```
+🏆 Ranking de Operadores (últimos 30 días)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🥇 María García - 0m 47s (100% conf.)
+🥈 Carlos López - 1m 12s (98% conf.)
+🥉 Juan Pérez - 1m 23s (95% conf.)
+4. Ana Martínez - 1m 45s (97% conf.)
+5. Pedro Gómez - 2m 01s (92% conf.)
+```
+
+### Análisis Temporal
+
+```
+📈 Alarmas por Hora del Día (últimos 7 días)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+00-06h ▓░░░░░░░░░ 12 alarmas
+06-12h ▓▓▓▓▓░░░░░ 45 alarmas
+12-18h ▓▓▓▓▓▓▓▓░░ 78 alarmas ⚠️ PICO
+18-24h ▓▓▓░░░░░░░ 21 alarmas
+
+💡 Recomendación: El mayor pico de alarmas
+   ocurre entre las 12:00 y 18:00.
+   Considerar reforzar el turno de tarde.
+```
+
+---
+
+## Queries SQL de Referencia
+
+### Rendimiento de Operadores
+
+```sql
+SELECT
+  u.name,
+  COUNT(*) as total_alarmas,
+  SUM(CASE WHEN an.status = 'CONFIRMED' THEN 1 ELSE 0 END) as confirmadas,
+  AVG(EXTRACT(EPOCH FROM (an.confirmed_at - an.sent_at))) as tiempo_promedio,
+  SUM(CASE WHEN an.escalated THEN 1 ELSE 0 END) as escalamientos
+FROM alarm_notifications an
+JOIN users u ON an.user_id = u.id
+WHERE an.sent_at >= NOW() - INTERVAL '7 days'
+  AND u.company_id = :company_id
+GROUP BY u.id, u.name
+ORDER BY tiempo_promedio ASC;
+```
+
+### Equipos Más Problemáticos
+
+```sql
+SELECT
+  a.name as arduino_name,
+  COUNT(*) as total_alarmas,
+  COUNT(DISTINCT DATE(al.created_at)) as dias_con_alarmas
+FROM alarms al
+JOIN arduinos a ON al.arduino_id = a.id
+WHERE al.created_at >= NOW() - INTERVAL '30 days'
+  AND a.company_id = :company_id
+GROUP BY a.id, a.name
+ORDER BY total_alarmas DESC
+LIMIT 10;
+```
+
+### Equipos Offline
+
+```sql
+SELECT name, last_seen,
+  EXTRACT(EPOCH FROM (NOW() - last_seen))/60 as minutos_offline
+FROM arduinos
+WHERE company_id = :company_id
+  AND last_seen < NOW() - INTERVAL '30 minutes'
+ORDER BY last_seen ASC;
+```
 
 ---
 
@@ -244,112 +762,6 @@ El sistema utiliza **MySQL 8.4+** con la base de datos `smartflexControldb`.
 
 ---
 
-## WhatsApp Bot - Comandos
-
-### Comandos de Control (Rol Operador)
-
-| Comando | Acción |
-|---------|--------|
-| `/estado [arduino]` | Ver estado completo |
-| `/on [arduino] [salida]` | Encender salida específica |
-| `/off [arduino] [salida]` | Apagar salida específica |
-| `/toggle [arduino] [salida]` | Cambiar estado de salida |
-| `/gps [arduino]` | Ver ubicación GPS |
-| `/alertas` | Ver suscripciones de alertas |
-
-### Comandos de Reportes (Rol Propietario)
-
-| Comando | Resultado |
-|---------|-----------|
-| `/reportes` | Abre menú de reportes |
-| `/ranking` | Ranking de operadores (30 días) |
-| `/pendientes` | Alarmas sin confirmar ahora |
-| `/offline` | Equipos sin conexión |
-| `/resumen` | Resumen general del día |
-| `/equipos` | Equipos más problemáticos |
-| `/comparar` | Comparativa mes actual vs anterior |
-
-### Roles WhatsApp
-
-| Rol | Permisos |
-|-----|----------|
-| **Propietario** | Ver estado, sensores, reportes. NO puede ejecutar comandos. |
-| **Operador** | Todo lo del Propietario + ejecutar comandos ON/OFF/TOGGLE |
-
----
-
-## Sistema de Reportes (25 tipos)
-
-### Reportes de Operadores (4)
-1. Rendimiento de operadores (Hoy/7d/30d)
-2. Ranking de respuestas (7d/30d)
-3. Tasa de escalamiento por operador (30d)
-4. Horarios con respuesta lenta (30d)
-
-### Reportes de Alarmas (7)
-5. Últimas alarmas confirmadas
-6. Alarmas sin confirmar (activas)
-7. Tiempos de respuesta
-8. Tiempo en estado de alarma
-9. Distribución por severidad
-10. Alarmas recurrentes
-11. Escalamientos múltiples
-
-### Reportes de Equipos (7)
-12. Equipos más problemáticos
-13. Equipos offline
-14. Historial batería baja
-15. Temp/Humedad fuera de rango
-16. Sensores inactivos
-17. Uptime por equipo
-18. Salud de equipos (dashboard)
-
-### Reportes de Tendencias (4)
-19. Alarmas por hora del día
-20. Alarmas por día de semana
-21. Tendencia mensual (12 meses)
-22. Comparativa mes actual vs anterior
-
-### Reportes de Comandos (3)
-23. Historial de comandos
-24. Comandos por operador
-25. Salidas más utilizadas
-
----
-
-## Configuración I/O
-
-### Entradas Digitales (DI1 - DI7)
-
-| ID | Uso típico | Sensor |
-|----|------------|--------|
-| DI1 | Puerta Principal | Magnético |
-| DI2 | Ventana | Magnético |
-| DI3 | Movimiento | PIR |
-| DI4 | Humo | Detector |
-| DI5 | Pánico | Pulsador |
-| DI6 | Agua | Inundación |
-| DI7 | Garage | Fin de carrera |
-
-### Salidas Digitales (DO1 - DO4)
-
-| ID | Uso típico | Comandos |
-|----|------------|----------|
-| DO1 | Luz Exterior | ON/OFF/TOGGLE |
-| DO2 | Sirena | ON/OFF/TOGGLE |
-| DO3 | Bomba Agua | ON/OFF/TOGGLE |
-| DO4 | Portón | ON/OFF/TOGGLE |
-
-### Sensores Adicionales
-
-| Sensor | Datos |
-|--------|-------|
-| DHT22 | Temperatura (°C) / Humedad (%) |
-| Batería | Nivel (%) / Voltaje (V) |
-| GPS | Lat/Long + Link Maps |
-
----
-
 ## Roles y Permisos (Admin Panel)
 
 | Rol | Permisos |
@@ -368,6 +780,23 @@ El sistema utiliza **MySQL 8.4+** con la base de datos `smartflexControldb`.
 | 4 | manager | Administrar empresa |
 | 5 | high_manager | Administrar múltiples empresas |
 | 6 | superadmin | Acceso total |
+
+---
+
+## Notas de Implementación
+
+1. Los alias de entradas/salidas se configuran en la Web UI de administración
+2. Las alertas se configuran desde la Web UI, el bot solo permite suscribirse/desuscribirse
+3. El timeout de sesión recomendado es de **5 minutos** de inactividad
+4. Cada comando debe registrarse en un **log de auditoría**
+5. Los mensajes deben ser concisos para WhatsApp (**máx 4096 caracteres**)
+6. Implementar **caché** para reportes pesados (ej: tendencia mensual)
+7. Limitar resultados en chatbot (ej: top 5/10) para mensajes cortos
+8. Ofrecer opción de "ver más" o enviar PDF/Excel para reportes extensos
+9. La Web UI puede mostrar reportes más detallados con gráficos
+10. Considerar **reportes programados** (ej: resumen semanal automático)
+11. Agregar filtros: por equipo, por operador, por período
+12. Sistema **bilingüe ES/EN** - todos los comandos funcionan en ambos idiomas
 
 ---
 
@@ -535,4 +964,5 @@ Privado - SmartFlex IoT © 2025
 
 ---
 
-*Documentación generada con [Claude Code](https://claude.ai/code) - Última actualización: 2025-12-04*
+*SmartFlex IoT - Documentación Técnica v52.0_PRO*
+*Generada con [Claude Code](https://claude.ai/code) - Última actualización: 2025-12-04*
