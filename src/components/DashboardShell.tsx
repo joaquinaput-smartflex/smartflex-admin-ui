@@ -27,6 +27,7 @@ import {
   IconKey,
   IconBuilding,
   IconBolt,
+  IconAddressBook,
 } from '@tabler/icons-react';
 import { apiUrl } from '@/lib/client-api';
 
@@ -39,7 +40,8 @@ interface DashboardShellProps {
 const navigation = [
   { label: 'Dashboard', icon: IconDashboard, href: '/dashboard' },
   { label: 'Empresas', icon: IconBuilding, href: '/dashboard/companies', roles: ['admin', 'superadmin'] },
-  { label: 'Usuarios', icon: IconUsers, href: '/dashboard/users', roles: ['admin', 'superadmin'] },
+  { label: 'Contactos', icon: IconAddressBook, href: '/dashboard/customers', roles: ['admin', 'superadmin'] },
+  { label: 'Usuarios Admin', icon: IconUsers, href: '/dashboard/users', roles: ['admin', 'superadmin'] },
   { label: 'Dispositivos', icon: IconDevices, href: '/dashboard/devices' },
 ];
 
