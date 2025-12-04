@@ -32,6 +32,8 @@ import {
   IconUser,
   IconBell,
   IconBellOff,
+  IconSearch,
+  IconX,
 } from '@tabler/icons-react';
 import { apiUrl } from '@/lib/client-api';
 
@@ -140,6 +142,20 @@ export default function CustomersPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [modalOpened, { open: openModal, close: closeModal }] = useDisclosure(false);
   const [deleteOpened, { open: openDelete, close: closeDelete }] = useDisclosure(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Filter customers based on search query
+  const filteredCustomers = customers.filter((customer) => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      customer.first_name.toLowerCase().includes(query) ||
+      customer.last_name.toLowerCase().includes(query) ||
+      customer.phone.includes(query) ||
+      (customer.email?.toLowerCase().includes(query) ?? false) ||
+      (customer.company_name?.toLowerCase().includes(query) ?? false)
+    );
+  });
 
   const form = useForm({
     initialValues: {
@@ -358,6 +374,34 @@ export default function CustomersPage() {
         </Button>
       </Group>
 
+      {/* Search/Filter */}
+      <Group>
+        <TextInput
+          placeholder="Buscar por nombre, teléfono, email o empresa..."
+          leftSection={<IconSearch size={16} />}
+          rightSection={
+            searchQuery ? (
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                size="sm"
+                onClick={() => setSearchQuery('')}
+              >
+                <IconX size={14} />
+              </ActionIcon>
+            ) : null
+          }
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.currentTarget.value)}
+          style={{ flex: 1, maxWidth: 400 }}
+        />
+        {searchQuery && (
+          <Text size="sm" c="dimmed">
+            {filteredCustomers.length} de {customers.length} contactos
+          </Text>
+        )}
+      </Group>
+
       <Card pos="relative">
         <LoadingOverlay visible={loading} />
         <Table striped highlightOnHover>
@@ -373,7 +417,7 @@ export default function CustomersPage() {
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
-            {customers.map((customer) => (
+            {filteredCustomers.map((customer) => (
               <Table.Tr key={customer.id}>
                 <Table.Td>
                   <Group gap="xs">
@@ -445,11 +489,13 @@ export default function CustomersPage() {
                 </Table.Td>
               </Table.Tr>
             ))}
-            {customers.length === 0 && !loading && (
+            {filteredCustomers.length === 0 && !loading && (
               <Table.Tr>
                 <Table.Td colSpan={7}>
                   <Text ta="center" c="dimmed" py="xl">
-                    No hay contactos registrados
+                    {searchQuery
+                      ? `No se encontraron contactos para "${searchQuery}"`
+                      : 'No hay contactos registrados'}
                   </Text>
                 </Table.Td>
               </Table.Tr>
