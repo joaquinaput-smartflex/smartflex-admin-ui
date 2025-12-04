@@ -7,7 +7,6 @@ import {
   Burger,
   Group,
   NavLink,
-  Title,
   Text,
   Avatar,
   Menu,
@@ -15,6 +14,7 @@ import {
   Badge,
   Divider,
   Box,
+  Stack,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import {
@@ -26,6 +26,7 @@ import {
   IconChevronDown,
   IconKey,
   IconBuilding,
+  IconBolt,
 } from '@tabler/icons-react';
 import { apiUrl } from '@/lib/client-api';
 
@@ -58,7 +59,7 @@ export function DashboardShell({ children, username, role }: DashboardShellProps
   const getRoleBadgeColor = (r: string) => {
     switch (r) {
       case 'superadmin': return 'grape';
-      case 'admin': return 'blue';
+      case 'admin': return 'cyan';
       default: return 'gray';
     }
   };
@@ -69,46 +70,106 @@ export function DashboardShell({ children, username, role }: DashboardShellProps
 
   return (
     <AppShell
-      header={{ height: 60 }}
+      header={{ height: 70 }}
       navbar={{ width: 260, breakpoint: 'sm', collapsed: { mobile: !opened } }}
       padding="md"
+      styles={{
+        main: {
+          backgroundColor: '#0a0f1a',
+        },
+        header: {
+          backgroundColor: '#0a0f1a',
+          borderBottom: '1px solid #06b6d4',
+          boxShadow: '0 4px 30px rgba(6, 182, 212, 0.2)',
+        },
+        navbar: {
+          backgroundColor: '#111827',
+          borderRight: '1px solid #1e293b',
+        },
+      }}
     >
       <AppShell.Header>
         <Group h="100%" px="md" justify="space-between">
-          <Group>
-            <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
-            <Title
-              order={3}
-              style={{
-                fontSize: 20,
-                background: 'linear-gradient(135deg, #60a5fa, #3b82f6)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-              }}
-            >
-              SMARTFLEX
-            </Title>
+          <Group gap="md">
+            <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" color="#e2e8f0" />
+
+            {/* Logo with icon and gradient text */}
+            <Group gap="xs">
+              <Box
+                style={{
+                  width: 40,
+                  height: 40,
+                  background: 'linear-gradient(135deg, #3b82f6, #a855f7)',
+                  borderRadius: 10,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 4px 15px rgba(59, 130, 246, 0.4)',
+                }}
+              >
+                <IconBolt size={24} color="white" />
+              </Box>
+              <Stack gap={0}>
+                <Text
+                  fw={700}
+                  style={{
+                    fontSize: 22,
+                    background: 'linear-gradient(135deg, #fff, #06b6d4)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    letterSpacing: '0.5px',
+                  }}
+                >
+                  SMARTFLEX<span style={{ fontStyle: 'italic', color: '#06b6d4', WebkitTextFillColor: '#06b6d4' }}> IoT</span>
+                </Text>
+                <Text
+                  size="xs"
+                  c="#06b6d4"
+                  style={{ letterSpacing: '2px', textTransform: 'uppercase', marginTop: -2 }}
+                >
+                  Admin Panel
+                </Text>
+              </Stack>
+            </Group>
           </Group>
 
           <Menu shadow="md" width={200}>
             <Menu.Target>
-              <UnstyledButton>
+              <UnstyledButton
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: 8,
+                  transition: 'background-color 0.2s',
+                }}
+                className="sf-card"
+              >
                 <Group gap="xs">
-                  <Avatar color="smartflex" radius="xl" size="sm">
+                  <Avatar
+                    radius="xl"
+                    size="sm"
+                    style={{
+                      background: 'linear-gradient(135deg, #3b82f6, #a855f7)',
+                    }}
+                  >
                     {username.charAt(0).toUpperCase()}
                   </Avatar>
                   <Box visibleFrom="sm">
-                    <Text size="sm" fw={500}>{username}</Text>
+                    <Text size="sm" fw={500} c="#e2e8f0">{username}</Text>
                     <Badge size="xs" color={getRoleBadgeColor(role)} variant="light">
                       {role}
                     </Badge>
                   </Box>
-                  <IconChevronDown size={14} />
+                  <IconChevronDown size={14} color="#64748b" />
                 </Group>
               </UnstyledButton>
             </Menu.Target>
 
-            <Menu.Dropdown>
+            <Menu.Dropdown
+              style={{
+                backgroundColor: '#111827',
+                borderColor: '#1e293b',
+              }}
+            >
               <Menu.Label>Cuenta</Menu.Label>
               {role === 'superadmin' && (
                 <Menu.Item
@@ -118,7 +179,7 @@ export function DashboardShell({ children, username, role }: DashboardShellProps
                   Configuración
                 </Menu.Item>
               )}
-              <Divider my="xs" />
+              <Divider my="xs" color="#1e293b" />
               <Menu.Item
                 color="red"
                 leftSection={<IconLogout size={14} />}
@@ -144,15 +205,28 @@ export function DashboardShell({ children, username, role }: DashboardShellProps
                 router.push(item.href);
                 toggle();
               }}
-              variant="filled"
               mb={4}
+              styles={{
+                root: {
+                  borderRadius: 8,
+                  color: '#e2e8f0',
+                  '&:hover': {
+                    backgroundColor: '#1a2332',
+                  },
+                  '&[data-active]': {
+                    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                    borderLeft: '3px solid #3b82f6',
+                    color: '#3b82f6',
+                  },
+                },
+              }}
             />
           ))}
         </AppShell.Section>
 
         {role === 'superadmin' && (
           <AppShell.Section>
-            <Divider my="sm" />
+            <Divider my="sm" color="#1e293b" />
             <NavLink
               label="Configuración"
               leftSection={<IconSettings size={18} />}
@@ -161,7 +235,20 @@ export function DashboardShell({ children, username, role }: DashboardShellProps
                 router.push('/dashboard/settings');
                 toggle();
               }}
-              variant="filled"
+              styles={{
+                root: {
+                  borderRadius: 8,
+                  color: '#e2e8f0',
+                  '&:hover': {
+                    backgroundColor: '#1a2332',
+                  },
+                  '&[data-active]': {
+                    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                    borderLeft: '3px solid #3b82f6',
+                    color: '#3b82f6',
+                  },
+                },
+              }}
             />
           </AppShell.Section>
         )}

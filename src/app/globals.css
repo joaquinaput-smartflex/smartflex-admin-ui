@@ -1,0 +1,184 @@
+/**
+ * SmartFlex Admin UI - Global Styles
+ * Matching smartflex_webui.html aesthetic
+ */
+
+:root {
+  --sf-bg-dark: #0a0f1a;
+  --sf-bg-card: #111827;
+  --sf-bg-card-hover: #1a2332;
+  --sf-border: #1e293b;
+  --sf-text: #e2e8f0;
+  --sf-text-muted: #64748b;
+  --sf-accent: #3b82f6;
+  --sf-accent-glow: rgba(59, 130, 246, 0.4);
+  --sf-success: #22c55e;
+  --sf-success-glow: rgba(34, 197, 94, 0.4);
+  --sf-danger: #ef4444;
+  --sf-danger-glow: rgba(239, 68, 68, 0.4);
+  --sf-warning: #f59e0b;
+  --sf-warning-glow: rgba(245, 158, 11, 0.4);
+  --sf-purple: #a855f7;
+  --sf-cyan: #06b6d4;
+  --sf-cyan-glow: rgba(6, 182, 212, 0.4);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--sf-bg-dark);
+  color: var(--sf-text);
+  min-height: 100vh;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--sf-bg-dark);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--sf-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+/* Logo gradient text */
+.logo-text {
+  font-size: 24px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #fff, var(--sf-cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 30px rgba(6, 182, 212, 0.5);
+}
+
+.logo-text .iot {
+  color: var(--sf-cyan);
+  -webkit-text-fill-color: var(--sf-cyan);
+  font-style: italic;
+}
+
+/* Logo icon with gradient */
+.logo-icon {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, var(--sf-accent), var(--sf-purple));
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 15px var(--sf-accent-glow);
+}
+
+/* Glow effects for buttons */
+.glow-blue {
+  box-shadow: 0 4px 15px var(--sf-accent-glow);
+}
+
+.glow-green {
+  box-shadow: 0 4px 15px var(--sf-success-glow);
+}
+
+.glow-red {
+  box-shadow: 0 4px 15px var(--sf-danger-glow);
+}
+
+.glow-cyan {
+  box-shadow: 0 4px 15px var(--sf-cyan-glow);
+}
+
+/* Card hover effect */
+.sf-card {
+  transition: all 0.2s ease;
+}
+
+.sf-card:hover {
+  background-color: var(--sf-bg-card-hover);
+  border-color: var(--sf-accent);
+}
+
+/* Status indicators */
+.status-online {
+  color: var(--sf-success);
+  text-shadow: 0 0 10px var(--sf-success-glow);
+}
+
+.status-offline {
+  color: var(--sf-danger);
+  text-shadow: 0 0 10px var(--sf-danger-glow);
+}
+
+/* Monospace values */
+.mono-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+}
+
+/* Pulse animation for alerts */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.pulse {
+  animation: pulse 2s infinite;
+}
+
+/* Header border glow */
+.header-glow {
+  border-bottom: 1px solid var(--sf-cyan);
+  box-shadow: 0 4px 30px rgba(6, 182, 212, 0.2);
+}
+
+/* Table enhancements */
+.mantine-Table-tr:hover {
+  background-color: var(--sf-bg-card-hover) !important;
+}
+
+/* Form input focus styles */
+.mantine-Input-input:focus {
+  border-color: var(--sf-accent) !important;
+  box-shadow: 0 0 0 2px var(--sf-accent-glow) !important;
+}
+
+/* Badge variants */
+.badge-success {
+  background-color: rgba(34, 197, 94, 0.15) !important;
+  color: var(--sf-success) !important;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.badge-danger {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+  color: var(--sf-danger) !important;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.badge-warning {
+  background-color: rgba(245, 158, 11, 0.15) !important;
+  color: var(--sf-warning) !important;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+/* Action icon hover */
+.mantine-ActionIcon-root:hover {
+  transform: scale(1.1);
+}
+
+/* Modal overlay */
+.mantine-Modal-overlay {
+  background-color: rgba(0, 0, 0, 0.7) !important;
+  backdrop-filter: blur(4px);
+}
