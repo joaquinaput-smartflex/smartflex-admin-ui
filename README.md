@@ -7,6 +7,15 @@ Panel de administración moderno para **SmartFlex IoT** - Sistema multi-tenant p
 **URL de producción:** https://smartflex.com.ar/admin
 **Versión:** SMART-v52.0_PRO
 
+### Conexión WhatsApp Bot
+
+| Parámetro | Valor |
+|-----------|-------|
+| **Número WhatsApp** | +54 9 11 3290-9073 |
+| **MQTT Broker** | 35.198.14.142:1883 |
+| **WebSocket (WS)** | 35.198.14.142:8083 |
+| **EMQX Dashboard** | http://35.198.14.142:18083 |
+
 ---
 
 ## Estado del Sistema
@@ -257,10 +266,15 @@ El sistema envía datos al servidor cuando:
 
 ### Parámetros de Configuración GPS
 
-- **GPS Timeout:** 30 segundos
-- **CLBS Accuracy:** ~500m (urbano), ~2km (rural)
-- **Update Interval:** Configurable (60s - 3600s)
-- **Power Mode:** Auto-sleep entre lecturas
+| Parámetro | Valor | Descripción |
+|-----------|-------|-------------|
+| `gnssQueryMs` | 3000 ms | Intervalo entre consultas AT+CGNSSINFO |
+| `maxGnssNoFix` | 6 intentos | Máximo intentos antes de fallback CLBS |
+| `clbsRetries` | 2 | Reintentos de ubicación por celdas |
+| GPS Timeout | 30 segundos | Tiempo máximo para obtener fix |
+| CLBS Accuracy | ~500m (urbano) / ~2km (rural) | Precisión por triangulación |
+| Update Interval | 60s - 3600s | Configurable según caso de uso |
+| Power Mode | Auto-sleep | Apaga GPS entre lecturas para ahorro |
 
 ---
 
@@ -274,7 +288,32 @@ El sistema envía datos al servidor cuando:
 | Humedad | 0% a 100% | ±2% |
 | Intervalo mínimo | 2 segundos | - |
 
+#### Thresholds para Envío de Datos
+
+El sistema solo envía datos al servidor cuando los valores cambian significativamente:
+
+| Sensor | Threshold | Descripción |
+|--------|-----------|-------------|
+| Temperatura | 1.0°C | Cambio mínimo para triggear envío |
+| Humedad | 3% | Cambio mínimo para triggear envío |
+
+Esto optimiza el uso de datos móviles y reduce carga en el broker MQTT.
+
 ### Monitoreo de Batería
+
+#### Curva Li-ion OCV (Open Circuit Voltage)
+
+Curva de descarga para batería Li-ion 1S (3.3V - 4.2V):
+
+| Voltaje | Porcentaje | Estado |
+|---------|------------|--------|
+| 4.20V | 100% | Carga completa |
+| 4.00V | 75% | Normal |
+| 3.80V | 50% | Medio |
+| 3.60V | 25% | Bajo |
+| 3.30V | 0% | Crítico - apagado |
+
+#### Para Batería 12V (Backup)
 
 | Nivel | Voltaje | Porcentaje |
 |-------|---------|------------|
@@ -286,7 +325,7 @@ El sistema envía datos al servidor cuando:
 ```
 Voltaje ADC → Divisor Resistivo → Cálculo
     │
-    ├── Rango: 10V - 15V
+    ├── Rango: 10V - 15V (12V) o 3.0V - 4.5V (Li-ion)
     ├── Resolución: 12 bits
     └── Fórmula: V = (ADC / 4095) × 3.3 × Factor
 ```
@@ -951,6 +990,30 @@ src/
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md) - Arquitectura detallada del sistema
 - [ROADMAP Completo](https://github.com/joaquinaput-smartflex/smartflex-whatsapp-bot/blob/main/docs/ROADMAP.md) - Plan de implementación detallado
 
+### Presentación Técnica (PowerPoint)
+
+**Archivo:** `SmartFlex_Sistema_IoT_1.pptx` (Google Drive)
+
+Presentación de 15 diapositivas con **27 imágenes/capturas** incluyendo:
+
+| Diapositiva | Contenido |
+|-------------|-----------|
+| 1-2 | Las 4 Columnas del Sistema, Arquitectura General |
+| 3-4 | FreeRTOS Dual-Core (Core 0/1), Secuencia de Stages |
+| 5-6 | Flujo MQTT, Formato de Payload JSON |
+| 7-8 | Ciclo GNSS con Fallback CLBS, Parámetros GPS |
+| 9-10 | Sensores (DHT22, Batería), Configuración I/O |
+| 11-12 | **Web UI Dashboard** - Screenshots de la interfaz de administración |
+| 13-14 | Roles y Permisos, Mapeo de I/O en la interfaz |
+| 15 | Navegación del Chatbot WhatsApp, Centro de Reportes |
+
+Las capturas incluyen vistas del:
+- Dashboard principal con métricas
+- Panel de control de dispositivos
+- Gestión de usuarios y roles
+- Configuración de entradas/salidas
+- Interfaz de monitoreo en tiempo real
+
 ---
 
 ## Soporte
@@ -965,4 +1028,4 @@ Privado - SmartFlex IoT © 2025
 ---
 
 *SmartFlex IoT - Documentación Técnica v52.0_PRO*
-*Generada con [Claude Code](https://claude.ai/code) - Última actualización: 2025-12-04*
+*Generada con [Claude Code](https://claude.ai/code) - Última actualización: 2025-12-03*
