@@ -156,6 +156,91 @@ export const settingsApi = {
   },
 };
 
+// Companies endpoints
+export const companiesApi = {
+  list: async (token: string) => {
+    return backendFetch<{ companies: Array<{
+      id: number;
+      name: string;
+      tax_id: string | null;
+      address: string | null;
+      city: string | null;
+      province: string | null;
+      country: string;
+      phone: string | null;
+      email: string | null;
+      contact_person: string | null;
+      notes: string | null;
+      status: 'active' | 'inactive' | 'suspended';
+      created_at: string;
+      updated_at: string;
+    }> }>('/admin/api/companies', {}, token);
+  },
+
+  get: async (token: string, id: number) => {
+    return backendFetch<{
+      id: number;
+      name: string;
+      tax_id: string | null;
+      address: string | null;
+      city: string | null;
+      province: string | null;
+      country: string;
+      phone: string | null;
+      email: string | null;
+      contact_person: string | null;
+      notes: string | null;
+      status: 'active' | 'inactive' | 'suspended';
+      created_at: string;
+      updated_at: string;
+    }>(`/admin/api/companies/${id}`, {}, token);
+  },
+
+  create: async (token: string, data: {
+    name: string;
+    tax_id?: string;
+    address?: string;
+    city?: string;
+    province?: string;
+    country?: string;
+    phone?: string;
+    email?: string;
+    contact_person?: string;
+    notes?: string;
+    status?: string;
+  }) => {
+    return backendFetch('/admin/api/companies', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }, token);
+  },
+
+  update: async (token: string, id: number, data: {
+    name?: string;
+    tax_id?: string;
+    address?: string;
+    city?: string;
+    province?: string;
+    country?: string;
+    phone?: string;
+    email?: string;
+    contact_person?: string;
+    notes?: string;
+    status?: string;
+  }) => {
+    return backendFetch(`/admin/api/companies/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }, token);
+  },
+
+  delete: async (token: string, id: number) => {
+    return backendFetch(`/admin/api/companies/${id}`, {
+      method: 'DELETE',
+    }, token);
+  },
+};
+
 // Devices endpoints
 export const devicesApi = {
   list: async (token: string) => {

@@ -25,6 +25,7 @@ import {
   IconLogout,
   IconChevronDown,
   IconKey,
+  IconBuilding,
 } from '@tabler/icons-react';
 import { apiUrl } from '@/lib/client-api';
 
@@ -36,6 +37,7 @@ interface DashboardShellProps {
 
 const navigation = [
   { label: 'Dashboard', icon: IconDashboard, href: '/dashboard' },
+  { label: 'Empresas', icon: IconBuilding, href: '/dashboard/companies', roles: ['admin', 'superadmin'] },
   { label: 'Usuarios', icon: IconUsers, href: '/dashboard/users', roles: ['admin', 'superadmin'] },
   { label: 'Dispositivos', icon: IconDevices, href: '/dashboard/devices' },
 ];
