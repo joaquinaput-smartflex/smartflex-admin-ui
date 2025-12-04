@@ -57,9 +57,9 @@ interface Device {
   sim_number: string | null;
   sim_carrier: string | null;
   relay_count: number;
-  relay_labels: string[] | null;
+  relay_labels: string[] | string | null;  // Can be JSON string from MySQL
   input_count: number;
-  input_labels: string[] | null;
+  input_labels: string[] | string | null;  // Can be JSON string from MySQL
   notes: string | null;
   status: 'active' | 'inactive' | 'maintenance';
   last_seen: string | null;
@@ -167,22 +167,47 @@ export default function DevicesPage() {
     openModal();
   };
 
+  // Helper to parse labels that might come as JSON string or array
+  const parseLabels = (labels: string[] | string | null | undefined, defaultLabels: string[]): string[] => {
+    if (!labels) return defaultLabels;
+
+    // If it's a string, try to parse as JSON
+    if (typeof labels === 'string') {
+      try {
+        const parsed = JSON.parse(labels);
+        if (Array.isArray(parsed)) {
+          return parsed.length > 0 ? parsed : defaultLabels;
+        }
+      } catch {
+        // Not valid JSON, return defaults
+        return defaultLabels;
+      }
+    }
+
+    // If it's already an array
+    if (Array.isArray(labels) && labels.length > 0) {
+      return labels;
+    }
+
+    return defaultLabels;
+  };
+
   const handleEdit = (device: Device) => {
     setSelectedDevice(device);
     const relayCount = device.relay_count || 4;
     const inputCount = device.input_count || 7;
 
-    // Ensure arrays have correct length, filling with defaults if needed
+    // Generate default labels
     const defaultRelayLabels = Array.from({ length: relayCount }, (_, i) => `Relay ${i + 1}`);
     const defaultInputLabels = Array.from({ length: inputCount }, (_, i) => `Input ${i + 1}`);
 
-    const relayLabels = device.relay_labels && device.relay_labels.length > 0
-      ? [...device.relay_labels, ...defaultRelayLabels].slice(0, relayCount)
-      : defaultRelayLabels;
+    // Parse labels from device (handles JSON string or array)
+    const parsedRelayLabels = parseLabels(device.relay_labels, defaultRelayLabels);
+    const parsedInputLabels = parseLabels(device.input_labels, defaultInputLabels);
 
-    const inputLabels = device.input_labels && device.input_labels.length > 0
-      ? [...device.input_labels, ...defaultInputLabels].slice(0, inputCount)
-      : defaultInputLabels;
+    // Ensure arrays have correct length, filling with defaults if needed
+    const relayLabels = [...parsedRelayLabels, ...defaultRelayLabels].slice(0, relayCount);
+    const inputLabels = [...parsedInputLabels, ...defaultInputLabels].slice(0, inputCount);
 
     form.setValues({
       device_id: device.device_id,
