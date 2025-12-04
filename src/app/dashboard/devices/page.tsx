@@ -169,6 +169,21 @@ export default function DevicesPage() {
 
   const handleEdit = (device: Device) => {
     setSelectedDevice(device);
+    const relayCount = device.relay_count || 4;
+    const inputCount = device.input_count || 7;
+
+    // Ensure arrays have correct length, filling with defaults if needed
+    const defaultRelayLabels = Array.from({ length: relayCount }, (_, i) => `Relay ${i + 1}`);
+    const defaultInputLabels = Array.from({ length: inputCount }, (_, i) => `Input ${i + 1}`);
+
+    const relayLabels = device.relay_labels && device.relay_labels.length > 0
+      ? [...device.relay_labels, ...defaultRelayLabels].slice(0, relayCount)
+      : defaultRelayLabels;
+
+    const inputLabels = device.input_labels && device.input_labels.length > 0
+      ? [...device.input_labels, ...defaultInputLabels].slice(0, inputCount)
+      : defaultInputLabels;
+
     form.setValues({
       device_id: device.device_id,
       company_id: device.company_id?.toString() || '',
@@ -180,10 +195,10 @@ export default function DevicesPage() {
       mac_address: device.mac_address || '',
       sim_number: device.sim_number || '',
       sim_carrier: device.sim_carrier || '',
-      relay_count: device.relay_count || 4,
-      relay_labels: device.relay_labels || ['Relay 1', 'Relay 2', 'Relay 3', 'Relay 4'],
-      input_count: device.input_count || 7,
-      input_labels: device.input_labels || ['Input 1', 'Input 2', 'Input 3', 'Input 4', 'Input 5', 'Input 6', 'Input 7'],
+      relay_count: relayCount,
+      relay_labels: relayLabels,
+      input_count: inputCount,
+      input_labels: inputLabels,
       notes: device.notes || '',
       status: device.status,
     });
@@ -626,9 +641,14 @@ export default function DevicesPage() {
                     <Grid.Col span={6} key={`relay-${i}`}>
                       <TextInput
                         placeholder={`Relay ${i + 1}`}
-                        value={form.values.relay_labels[i] || ''}
+                        value={(form.values.relay_labels && form.values.relay_labels[i]) || ''}
                         onChange={(e) => {
-                          const newLabels = [...form.values.relay_labels];
+                          const currentLabels = form.values.relay_labels || [];
+                          const newLabels = [...currentLabels];
+                          // Ensure array is long enough
+                          while (newLabels.length <= i) {
+                            newLabels.push(`Relay ${newLabels.length + 1}`);
+                          }
                           newLabels[i] = e.currentTarget.value;
                           form.setFieldValue('relay_labels', newLabels);
                         }}
@@ -643,9 +663,14 @@ export default function DevicesPage() {
                     <Grid.Col span={6} key={`input-${i}`}>
                       <TextInput
                         placeholder={`Input ${i + 1}`}
-                        value={form.values.input_labels[i] || ''}
+                        value={(form.values.input_labels && form.values.input_labels[i]) || ''}
                         onChange={(e) => {
-                          const newLabels = [...form.values.input_labels];
+                          const currentLabels = form.values.input_labels || [];
+                          const newLabels = [...currentLabels];
+                          // Ensure array is long enough
+                          while (newLabels.length <= i) {
+                            newLabels.push(`Input ${newLabels.length + 1}`);
+                          }
                           newLabels[i] = e.currentTarget.value;
                           form.setFieldValue('input_labels', newLabels);
                         }}
