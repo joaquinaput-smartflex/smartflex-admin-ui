@@ -100,7 +100,9 @@ export default function UsersPage() {
 
   const handleSubmit = async (values: typeof form.values) => {
     try {
-      const url = selectedUser ? `/api/users/${selectedUser.id}` : '/api/users';
+      const url = selectedUser
+        ? apiUrl(`/api/users/${selectedUser.id}`)
+        : apiUrl('/api/users');
       const method = selectedUser ? 'PUT' : 'POST';
 
       const response = await fetch(url, {
@@ -141,7 +143,7 @@ export default function UsersPage() {
     if (!selectedUser) return;
 
     try {
-      const response = await fetch(`/api/users/${selectedUser.id}`, {
+      const response = await fetch(apiUrl(`/api/users/${selectedUser.id}`), {
         method: 'DELETE',
       });
 
@@ -174,7 +176,7 @@ export default function UsersPage() {
 
   const handleResetPassword = async (user: User) => {
     try {
-      const response = await fetch(`/api/users/${user.id}/reset-password`, {
+      const response = await fetch(apiUrl(`/api/users/${user.id}/reset-password`), {
         method: 'POST',
       });
 
