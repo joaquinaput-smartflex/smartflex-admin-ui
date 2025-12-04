@@ -34,10 +34,19 @@ jobs:
         env:
           BACKEND_URL: ${{ secrets.BACKEND_URL }}
 
+      - name: Verify build output
+        run: |
+          echo "Checking .next directory..."
+          ls -la .next/
+          test -f .next/BUILD_ID && echo "BUILD_ID exists" || (echo "BUILD_ID missing!" && exit 1)
+          test -d .next/static && echo "static/ exists" || (echo "static/ missing!" && exit 1)
+          test -d .next/server && echo "server/ exists" || (echo "server/ missing!" && exit 1)
+
       - name: Create deployment package
         run: |
           tar -czf deploy.tar.gz \
             .next \
+            node_modules \
             package.json \
             package-lock.json \
             next.config.ts
@@ -75,29 +84,51 @@ jobs:
             set -e
             cd ~/smartflex-admin-ui
 
-            # Backup current .next
-            if [ -d ".next" ]; then
+            # Stop current server
+            pkill -f 'next-server' || true
+            sleep 2
+
+            # Backup current .next (if it has BUILD_ID, it's valid)
+            if [ -f ".next/BUILD_ID" ]; then
               rm -rf .next.backup
               mv .next .next.backup
+              echo "Created backup of valid .next"
+            else
+              rm -rf .next
+              echo "Removed incomplete .next"
             fi
 
             # Extract new build
             tar -xzf /tmp/deploy.tar.gz
             rm /tmp/deploy.tar.gz
 
-            # Install production dependencies
+            # Verify extracted build
+            if [ ! -f ".next/BUILD_ID" ]; then
+              echo "ERROR: Extracted build is missing BUILD_ID!"
+              exit 1
+            fi
+
+            # Load nvm
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-            npm ci --production
 
-            # Restart the application
-            pkill -f 'next-server' || true
-            sleep 2
+            # Start the application
             nohup npm start > next.log 2>&1 &
 
-            # Verify
-            sleep 5
-            curl -s http://localhost:3000 > /dev/null && echo "Deployment successful!"
+            # Wait for startup with retries
+            echo "Waiting for server to start..."
+            for i in 1 2 3 4 5 6; do
+              sleep 5
+              if curl -s http://localhost:3000 > /dev/null 2>&1; then
+                echo "Deployment successful! Server is running."
+                exit 0
+              fi
+              echo "Attempt $i: Server not ready yet..."
+            done
+
+            echo "Server failed to start. Check next.log for errors."
+            cat next.log | tail -20
+            exit 1
           ENDSSH
 
       - name: Rollback on failure
