@@ -822,6 +822,196 @@ El sistema utiliza **MySQL 8.4+** con la base de datos `smartflexControldb`.
 
 ---
 
+## Modelo de Acceso Multi-Tenant
+
+### Arquitectura de Relaciones
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        MODELO DE ACCESO SMARTFLEX                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌─────────────┐         ┌─────────────┐         ┌─────────────┐           │
+│  │  EMPRESA A  │────────▶│ DISPOSITIVO │◀────────│  EMPRESA B  │           │
+│  │  (company)  │  owner  │  (hardware) │  access │  (company)  │           │
+│  └──────┬──────┘         └──────┬──────┘         └──────┬──────┘           │
+│         │                       │                       │                   │
+│    ┌────┴────┐            ┌────┴────┐            ┌────┴────┐               │
+│    │customers│            │io_config│            │customers│               │
+│    └────┬────┘            │ 7 DI    │            └────┬────┘               │
+│         │                 │ 4 DO    │                 │                     │
+│    ┌────┴────────────────┐└─────────┘    ┌────────────┴────┐               │
+│    │  hardware_access    │               │  company_access  │               │
+│    │  - can_view         │               │  - view          │               │
+│    │  - can_control      │               │  - control       │               │
+│    │  - relay_mask       │               │  - admin         │               │
+│    │  - di_mask          │               └─────────────────┘               │
+│    └────────┬────────────┘                                                  │
+│             │                                                               │
+│    ┌────────┴────────────┐                                                  │
+│    │    wa_devices       │                                                  │
+│    │  phone → device_id  │                                                  │
+│    │  role: readonly/    │                                                  │
+│    │        user/admin   │                                                  │
+│    └─────────────────────┘                                                  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Tablas de Acceso
+
+#### `hardware_access` - Permisos Granulares por Dispositivo
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `customer_id` | FK → customer | Usuario que recibe el permiso |
+| `hardware_id` | FK → hardware | Dispositivo al que accede |
+| `can_view` | boolean | Puede ver estados y sensores |
+| `can_control` | boolean | Puede ejecutar comandos |
+| `relay_mask` | char(4) | Máscara de relés controlables (ej: "1100") |
+| `di_mask` | char(7) | Máscara de entradas visibles (ej: "1111111") |
+| `expires_at` | timestamp | Acceso temporal (null = permanente) |
+
+**Ejemplo de máscaras:**
+- `relay_mask="1100"` → Puede controlar DO0 y DO1, NO puede controlar DO2 y DO3
+- `di_mask="1111000"` → Puede ver DI0-DI3, NO puede ver DI4-DI6
+
+#### `company_access` - Acceso Multi-Empresa
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `customer_id` | FK → customer | Usuario de la empresa origen |
+| `target_company_id` | FK → company | Empresa a la que obtiene acceso |
+| `access_level` | enum | `view` / `control` / `admin` |
+| `expires_at` | timestamp | Acceso temporal (null = permanente) |
+
+**Casos de uso:**
+- **Empresa de mantenimiento** → acceso `view` a múltiples clientes
+- **Grupo empresarial** → `admin` de empresa matriz a subsidiarias
+- **Técnico externo** → acceso temporal con `expires_at`
+
+#### `wa_devices` - Mapeo WhatsApp → Dispositivo
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `phone` | varchar(20) | Número de WhatsApp |
+| `device_id` | varchar(100) | ID del dispositivo |
+| `alias` | varchar(50) | Nombre amigable para el bot |
+| `role` | enum | `readonly` / `user` / `admin` / `owner` |
+
+### Ejemplo Real del Sistema
+
+#### Usuarios Registrados
+
+| Usuario | Empresa | Perfil | Teléfono |
+|---------|---------|--------|----------|
+| Joaquin Aput | SMARTFLEX Admin | superadmin | 5491136927440 |
+| Ignacio Miche | BIOPROSUR | manager | 5491159545649 |
+| Salvador Aput | SMARTFLEX SAS | operator | 5491121832509 |
+| Lorenzo Aput | SMARTFLEX SAS | guest | 5491121674990 |
+| Carlos Monti | SMARTFLEX SAS | operator | 5491121974269 |
+
+#### Permisos por Dispositivo
+
+| Usuario | Empresa | Ver | Controlar | Relés | Entradas |
+|---------|---------|-----|-----------|-------|----------|
+| Joaquin | SMARTFLEX Admin | ✅ | ✅ | 1111 (todos) | 1111111 (todas) |
+| Ignacio | BIOPROSUR | ✅ | ✅ | 1111 (todos) | 1111111 (todas) |
+| Salvador | SMARTFLEX SAS | ✅ | ✅ | 1100 (DO0,DO1) | 1111111 (todas) |
+| Lorenzo | SMARTFLEX SAS | ✅ | ❌ | 0000 (ninguno) | 1111111 (todas) |
+| Carlos | SMARTFLEX SAS | ✅ | ✅ | 1111 (todos) | 1111111 (todas) |
+
+#### Acceso Multi-Empresa
+
+| Usuario | Empresa Origen | Empresa Destino | Nivel |
+|---------|----------------|-----------------|-------|
+| Ignacio Miche | BIOPROSUR | SMARTFLEX SAS | admin |
+
+> Ignacio de BIOPROSUR puede administrar dispositivos de SMARTFLEX SAS sin ser superadmin.
+
+### Flujo de Autorización WhatsApp
+
+```
+┌──────────────────┐
+│  Usuario envía   │
+│  comando WhatsApp│
+└────────┬─────────┘
+         ▼
+┌──────────────────┐
+│ Buscar en        │
+│ wa_devices       │
+│ WHERE phone=X    │
+└────────┬─────────┘
+         ▼
+┌──────────────────┐     NO     ┌──────────────────┐
+│ ¿Existe mapeo?   │───────────▶│ "No autorizado"  │
+└────────┬─────────┘            └──────────────────┘
+         │ SÍ
+         ▼
+┌──────────────────┐
+│ Obtener device_id│
+│ y rol del usuario│
+└────────┬─────────┘
+         ▼
+┌──────────────────┐
+│ Verificar permisos│
+│ según rol:       │
+│ - readonly: solo │
+│   ver estado     │
+│ - user: +control │
+│ - admin: +config │
+│ - owner: todo    │
+└────────┬─────────┘
+         ▼
+┌──────────────────┐
+│ Ejecutar comando │
+│ si autorizado    │
+└──────────────────┘
+```
+
+### Queries SQL de Referencia
+
+#### Obtener todos los dispositivos accesibles por un usuario
+
+```sql
+-- Dispositivos de su empresa + dispositivos con acceso explícito
+SELECT DISTINCT h.client_id, h.alias, c.name as empresa
+FROM hardware h
+JOIN company c ON h.company_id = c.id
+LEFT JOIN hardware_access ha ON ha.hardware_id = h.id
+LEFT JOIN customer cu ON ha.customer_id = cu.id
+WHERE h.company_id = :user_company_id
+   OR cu.id = :user_id;
+```
+
+#### Verificar si usuario puede controlar un relé específico
+
+```sql
+SELECT
+  ha.can_control,
+  SUBSTRING(ha.relay_mask, :relay_index + 1, 1) as relay_allowed
+FROM hardware_access ha
+WHERE ha.customer_id = :user_id
+  AND ha.hardware_id = :hardware_id
+  AND ha.can_control = 1
+  AND SUBSTRING(ha.relay_mask, :relay_index + 1, 1) = '1';
+```
+
+#### Listar empresas accesibles por un high_manager
+
+```sql
+SELECT
+  target.id,
+  target.name,
+  ca.access_level
+FROM company_access ca
+JOIN company target ON ca.target_company_id = target.id
+WHERE ca.customer_id = :user_id
+  AND (ca.expires_at IS NULL OR ca.expires_at > NOW());
+```
+
+---
+
 ## Notas de Implementación
 
 1. Los alias de entradas/salidas se configuran en la Web UI de administración
