@@ -164,6 +164,7 @@ export const companiesApi = {
       id: number;
       name: string;
       tax_id: string | null;
+      tax_condition: 'consumidor_final' | 'responsable_inscripto' | 'iva_exento' | 'monotributista' | 'no_responsable';
       address: string | null;
       city: string | null;
       province: string | null;
@@ -183,6 +184,7 @@ export const companiesApi = {
       id: number;
       name: string;
       tax_id: string | null;
+      tax_condition: 'consumidor_final' | 'responsable_inscripto' | 'iva_exento' | 'monotributista' | 'no_responsable';
       address: string | null;
       city: string | null;
       province: string | null;
@@ -200,6 +202,7 @@ export const companiesApi = {
   create: async (token: string, data: {
     name: string;
     tax_id?: string;
+    tax_condition?: string;
     address?: string;
     city?: string;
     province?: string;
@@ -219,6 +222,7 @@ export const companiesApi = {
   update: async (token: string, id: number, data: {
     name?: string;
     tax_id?: string;
+    tax_condition?: string;
     address?: string;
     city?: string;
     province?: string;
@@ -325,17 +329,95 @@ export const customersApi = {
   },
 };
 
-// Devices endpoints
+// Device type definition
+export interface Device {
+  id: number;
+  device_id: string;
+  company_id: number | null;
+  company_name: string | null;
+  name: string | null;
+  location: string | null;
+  model: string;
+  firmware_version: string | null;
+  imei: string | null;
+  mac_address: string | null;
+  sim_number: string | null;
+  sim_carrier: string | null;
+  relay_count: number;
+  relay_labels: string[] | null;
+  input_count: number;
+  input_labels: string[] | null;
+  alert_config: { relay_alerts?: boolean[]; input_alerts?: boolean[] } | null;
+  notes: string | null;
+  status: 'active' | 'inactive' | 'maintenance';
+  last_seen: string | null;
+  online: boolean;
+  relays?: number[];
+  created_at: string;
+  updated_at: string;
+}
+
+// Devices endpoints (using /devices/full for complete data)
 export const devicesApi = {
   list: async (token: string) => {
-    return backendFetch<Array<{
-      id: number;
-      imei: string;
-      friendly_name: string | null;
-      owner_phone: string | null;
-      is_active: boolean;
-      created_at: string;
-    }>>('/admin/api/devices', {}, token);
+    return backendFetch<{ devices: Device[] }>('/admin/api/devices/full', {}, token);
+  },
+
+  get: async (token: string, id: number) => {
+    return backendFetch<Device>(`/admin/api/devices/full/${id}`, {}, token);
+  },
+
+  create: async (token: string, data: {
+    device_id: string;
+    company_id?: number;
+    name?: string;
+    location?: string;
+    model?: string;
+    firmware_version?: string;
+    imei?: string;
+    mac_address?: string;
+    sim_number?: string;
+    sim_carrier?: string;
+    relay_count?: number;
+    relay_labels?: string[];
+    input_count?: number;
+    input_labels?: string[];
+    notes?: string;
+    status?: string;
+  }) => {
+    return backendFetch('/admin/api/devices/full', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }, token);
+  },
+
+  update: async (token: string, id: number, data: {
+    company_id?: number;
+    name?: string;
+    location?: string;
+    model?: string;
+    firmware_version?: string;
+    imei?: string;
+    mac_address?: string;
+    sim_number?: string;
+    sim_carrier?: string;
+    relay_count?: number;
+    relay_labels?: string[];
+    input_count?: number;
+    input_labels?: string[];
+    notes?: string;
+    status?: string;
+  }) => {
+    return backendFetch(`/admin/api/devices/full/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }, token);
+  },
+
+  delete: async (token: string, id: number) => {
+    return backendFetch(`/admin/api/devices/full/${id}`, {
+      method: 'DELETE',
+    }, token);
   },
 
   getState: async (token: string, imei: string) => {
@@ -350,17 +432,6 @@ export const devicesApi = {
       gps_fix: number;
       rssi: number;
     }>(`/admin/api/devices/${imei}/state`, {}, token);
-  },
-
-  update: async (token: string, id: number, data: {
-    friendly_name?: string;
-    owner_phone?: string;
-    is_active?: boolean;
-  }) => {
-    return backendFetch(`/admin/api/devices/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }, token);
   },
 };
 

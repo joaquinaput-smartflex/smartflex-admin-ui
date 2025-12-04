@@ -145,13 +145,24 @@ export default function CustomersPage() {
   const [searchQuery, setSearchQuery] = useState('');
 
   // Filter customers based on search query
+  // Searches in: full name, first name, last name, phone (formatted and raw), email, company
   const filteredCustomers = customers.filter((customer) => {
     if (!searchQuery.trim()) return true;
     const query = searchQuery.toLowerCase();
+
+    // Full name for combined search (e.g., "Juan Pérez")
+    const fullName = `${customer.first_name} ${customer.last_name}`.toLowerCase();
+
+    // Clean phone for flexible phone search (removes +, spaces, -)
+    const queryDigits = query.replace(/\D/g, '');
+    const phoneDigits = customer.phone.replace(/\D/g, '');
+
     return (
+      fullName.includes(query) ||
       customer.first_name.toLowerCase().includes(query) ||
       customer.last_name.toLowerCase().includes(query) ||
       customer.phone.includes(query) ||
+      (queryDigits && phoneDigits.includes(queryDigits)) ||
       (customer.email?.toLowerCase().includes(query) ?? false) ||
       (customer.company_name?.toLowerCase().includes(query) ?? false)
     );

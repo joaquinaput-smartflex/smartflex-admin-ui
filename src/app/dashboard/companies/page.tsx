@@ -32,6 +32,8 @@ import {
   IconMapPin,
   IconUsers,
   IconDevices,
+  IconSearch,
+  IconX,
 } from '@tabler/icons-react';
 import { apiUrl } from '@/lib/client-api';
 
@@ -39,6 +41,7 @@ interface Company {
   id: number;
   name: string;
   tax_id: string | null;
+  tax_condition: 'consumidor_final' | 'responsable_inscripto' | 'iva_exento' | 'monotributista' | 'no_responsable';
   address: string | null;
   city: string | null;
   province: string | null;
@@ -59,11 +62,30 @@ export default function CompaniesPage() {
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [modalOpened, { open: openModal, close: closeModal }] = useDisclosure(false);
   const [deleteOpened, { open: openDelete, close: closeDelete }] = useDisclosure(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Filter companies based on search query
+  const filteredCompanies = companies.filter((company) => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase();
+
+    return (
+      company.name.toLowerCase().includes(query) ||
+      (company.tax_id?.toLowerCase().includes(query) ?? false) ||
+      (company.contact_person?.toLowerCase().includes(query) ?? false) ||
+      (company.phone?.includes(query) ?? false) ||
+      (company.email?.toLowerCase().includes(query) ?? false) ||
+      (company.city?.toLowerCase().includes(query) ?? false) ||
+      (company.province?.toLowerCase().includes(query) ?? false) ||
+      (company.tax_condition?.toLowerCase().includes(query) ?? false)
+    );
+  });
 
   const form = useForm({
     initialValues: {
       name: '',
       tax_id: '',
+      tax_condition: 'consumidor_final',
       address: '',
       city: '',
       province: '',
@@ -103,6 +125,7 @@ export default function CompaniesPage() {
     setSelectedCompany(null);
     form.reset();
     form.setFieldValue('country', 'Argentina');
+    form.setFieldValue('tax_condition', 'consumidor_final');
     form.setFieldValue('status', 'active');
     openModal();
   };
@@ -112,6 +135,7 @@ export default function CompaniesPage() {
     form.setValues({
       name: company.name,
       tax_id: company.tax_id || '',
+      tax_condition: company.tax_condition || 'consumidor_final',
       address: company.address || '',
       city: company.city || '',
       province: company.province || '',
@@ -217,6 +241,23 @@ export default function CompaniesPage() {
     }
   };
 
+  const getTaxConditionLabel = (condition: string) => {
+    switch (condition) {
+      case 'consumidor_final':
+        return 'Cons. Final';
+      case 'responsable_inscripto':
+        return 'Resp. Inscripto';
+      case 'iva_exento':
+        return 'IVA Exento';
+      case 'monotributista':
+        return 'Monotributo';
+      case 'no_responsable':
+        return 'No Resp.';
+      default:
+        return condition || '-';
+    }
+  };
+
   return (
     <Stack gap="lg">
       <Group justify="space-between">
@@ -229,6 +270,34 @@ export default function CompaniesPage() {
         </Button>
       </Group>
 
+      {/* Search/Filter */}
+      <Group>
+        <TextInput
+          placeholder="Buscar por nombre, CUIT, contacto, teléfono, email o ciudad..."
+          leftSection={<IconSearch size={16} />}
+          rightSection={
+            searchQuery ? (
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                size="sm"
+                onClick={() => setSearchQuery('')}
+              >
+                <IconX size={14} />
+              </ActionIcon>
+            ) : null
+          }
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.currentTarget.value)}
+          style={{ flex: 1, maxWidth: 400 }}
+        />
+        {searchQuery && (
+          <Text size="sm" c="dimmed">
+            {filteredCompanies.length} de {companies.length} empresas
+          </Text>
+        )}
+      </Group>
+
       <Card pos="relative">
         <LoadingOverlay visible={loading} />
         <Table striped highlightOnHover>
@@ -236,6 +305,7 @@ export default function CompaniesPage() {
             <Table.Tr>
               <Table.Th>Empresa</Table.Th>
               <Table.Th>CUIT</Table.Th>
+              <Table.Th>Cond. IVA</Table.Th>
               <Table.Th>Contacto</Table.Th>
               <Table.Th>Ubicación</Table.Th>
               <Table.Th>Estado</Table.Th>
@@ -243,7 +313,7 @@ export default function CompaniesPage() {
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
-            {companies.map((company) => (
+            {filteredCompanies.map((company) => (
               <Table.Tr key={company.id}>
                 <Table.Td>
                   <Group gap="xs">
@@ -258,6 +328,9 @@ export default function CompaniesPage() {
                 </Table.Td>
                 <Table.Td>
                   <Text size="sm" ff="monospace">{company.tax_id || '-'}</Text>
+                </Table.Td>
+                <Table.Td>
+                  <Text size="sm">{getTaxConditionLabel(company.tax_condition)}</Text>
                 </Table.Td>
                 <Table.Td>
                   <Stack gap={2}>
@@ -350,11 +423,13 @@ export default function CompaniesPage() {
                 </Table.Td>
               </Table.Tr>
             ))}
-            {companies.length === 0 && !loading && (
+            {filteredCompanies.length === 0 && !loading && (
               <Table.Tr>
-                <Table.Td colSpan={6}>
+                <Table.Td colSpan={7}>
                   <Text ta="center" c="dimmed" py="xl">
-                    No hay empresas registradas
+                    {searchQuery
+                      ? `No se encontraron empresas para "${searchQuery}"`
+                      : 'No hay empresas registradas'}
                   </Text>
                 </Table.Td>
               </Table.Tr>
@@ -373,7 +448,7 @@ export default function CompaniesPage() {
         <form onSubmit={form.onSubmit(handleSubmit)}>
           <Stack gap="md">
             <Grid>
-              <Grid.Col span={8}>
+              <Grid.Col span={6}>
                 <TextInput
                   label="Nombre de la Empresa"
                   placeholder="Empresa S.A."
@@ -382,11 +457,24 @@ export default function CompaniesPage() {
                   required
                 />
               </Grid.Col>
-              <Grid.Col span={4}>
+              <Grid.Col span={3}>
                 <TextInput
                   label="CUIT"
                   placeholder="30-12345678-9"
                   {...form.getInputProps('tax_id')}
+                />
+              </Grid.Col>
+              <Grid.Col span={3}>
+                <Select
+                  label="Condición IVA"
+                  data={[
+                    { value: 'consumidor_final', label: 'Consumidor Final' },
+                    { value: 'responsable_inscripto', label: 'Responsable Inscripto' },
+                    { value: 'iva_exento', label: 'IVA Exento' },
+                    { value: 'monotributista', label: 'Monotributista' },
+                    { value: 'no_responsable', label: 'No Responsable' },
+                  ]}
+                  {...form.getInputProps('tax_condition')}
                 />
               </Grid.Col>
             </Grid>

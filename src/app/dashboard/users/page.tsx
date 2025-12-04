@@ -51,6 +51,7 @@ export default function UsersPage() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [modalOpened, { open: openModal, close: closeModal }] = useDisclosure(false);
   const [deleteOpened, { open: openDelete, close: closeDelete }] = useDisclosure(false);
+  const [currentUsername, setCurrentUsername] = useState<string | null>(null);
 
   const form = useForm({
     initialValues: {
@@ -76,8 +77,21 @@ export default function UsersPage() {
     }
   };
 
+  const loadSession = async () => {
+    try {
+      const response = await fetch(apiUrl('/api/auth/session'));
+      if (response.ok) {
+        const data = await response.json();
+        setCurrentUsername(data.username);
+      }
+    } catch (error) {
+      console.error('Error loading session:', error);
+    }
+  };
+
   useEffect(() => {
     loadUsers();
+    loadSession();
   }, []);
 
   const handleCreate = () => {
@@ -282,14 +296,16 @@ export default function UsersPage() {
                     >
                       <IconEdit size={18} />
                     </ActionIcon>
-                    <ActionIcon
-                      variant="subtle"
-                      color="orange"
-                      onClick={() => handleResetPassword(user)}
-                      title="Resetear Contraseña"
-                    >
-                      <IconKey size={18} />
-                    </ActionIcon>
+                    {user.username !== currentUsername && (
+                      <ActionIcon
+                        variant="subtle"
+                        color="orange"
+                        onClick={() => handleResetPassword(user)}
+                        title="Resetear Contraseña"
+                      >
+                        <IconKey size={18} />
+                      </ActionIcon>
+                    )}
                     {user.role !== 'superadmin' && (
                       <ActionIcon
                         variant="subtle"
