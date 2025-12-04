@@ -778,7 +778,7 @@ export default function DevicesPage() {
       >
         {selectedDevice && (
           <iframe
-            src={`https://smartflex.com.ar/smartflex_webui.html?device_id=${encodeURIComponent(selectedDevice.device_id)}&name=${encodeURIComponent(selectedDevice.name || selectedDevice.device_id)}&autoconnect=1`}
+            src={`https://smartflex.com.ar/webui.html?device_id=${encodeURIComponent(selectedDevice.device_id)}&name=${encodeURIComponent(selectedDevice.name || selectedDevice.device_id)}&autoconnect=1`}
             style={{
               width: '100%',
               height: '100%',
