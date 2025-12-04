@@ -15,7 +15,8 @@ export async function GET() {
     return NextResponse.json({ error: result.error }, { status: result.status });
   }
 
-  return NextResponse.json(result.data);
+  // Backend returns { users: [...] }, extract the array
+  return NextResponse.json(result.data?.users || []);
 }
 
 // POST /api/users - Create new user

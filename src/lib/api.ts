@@ -75,7 +75,8 @@ export const authApi = {
 // User management endpoints
 export const usersApi = {
   list: async (token: string) => {
-    return backendFetch<Array<{
+    // Backend returns { users: [...] }
+    return backendFetch<{ users: Array<{
       id: number;
       username: string;
       email: string | null;
@@ -87,7 +88,7 @@ export const usersApi = {
       locked_until: string | null;
       last_login: string | null;
       created_at: string;
-    }>>('/admin/api/users', {}, token);
+    }> }>('/admin/api/users', {}, token);
   },
 
   create: async (token: string, data: {
